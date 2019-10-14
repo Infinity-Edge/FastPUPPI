@@ -2,14 +2,14 @@ import os, re
 import ROOT
 ROOT.PyConfig.IgnoreCommandLineOptions = True
 ROOT.gROOT.SetBatch(True)
+ROOT.gStyle.SetOptStat(False)
+ROOT.gStyle.SetErrorX(0.5)
 ROOT.gErrorIgnoreLevel = ROOT.kWarning
 
 from array import array
 from math import pow, sin, cos, hypot
 import itertools
 from FastPUPPI.NtupleProducer.scripts.makeJecs import _progress
-from FastPUPPI.NtupleProducer.plotTemplate import plotTemplate
-
 
 def calcHT(jets):
     return sum(j[0] for j in jets) if jets else 0
@@ -19,7 +19,8 @@ def calcMJJ(jets):
     if len(jets) <= 1: return 0
     lvclass = ROOT.Math.LorentzVector("ROOT::Math::PtEtaPhiM4D<double>")
     jp4s = [ lvclass(j[0],j[1],j[2],0) for j in jets ]
-    return max((j1+j2).M() for (j1,j2) in itertools.combinations(jp4s,2))
+    return max((j1+j2).M() if j1.Pt() > 70. and j2.Pt() > 40. and abs(j1.Eta()-j2.Eta()) > 4. and abs(j1.Phi()-j2.Phi()) < 2. else 0 for (j1,j2) in itertools.combinations(jp4s,2))
+
 
 class CalcJ:
     def __init__(self,index):
@@ -51,12 +52,12 @@ def makeCalc(what):
     if what.startswith("ptj-mjj"): 
         return CalcJ2_MJJcut(float(what.replace("ptj-mjj","")))
 
-def makeGenArray(tree, what, ptCut, etaCut, _cache={}):
+def makeGenArray(tree, what, ptCut, etaCut, requireFwdSignalJet=False,_cache={}):
     _key = (id(tree),what,int(ptCut*100),int(etaCut*1000))
     if _key in _cache: return _cache[_key]
     if what == "metmht":
-        met = makeGenArray(tree, "met",     0,    5.0, _cache=_cache)
-        mht = makeGenArray(tree, "mht", ptCut, etaCut, _cache=_cache)
+        met = makeGenArray(tree, "met",     0,    5.0, False ,_cache=_cache)
+        mht = makeGenArray(tree, "mht", ptCut, etaCut, False ,_cache=_cache)
         ret = map(min, zip(met,mht))
         _cache[_key] = ret
         return ret
@@ -74,6 +75,8 @@ def makeGenArray(tree, what, ptCut, etaCut, _cache={}):
         tree.GetEntry(i)
         pt,eta,phi = tree.GenJets_pt, tree.GenJets_eta, tree.GenJets_phi
         jets = [ (pt[j],eta[j],phi[j]) for j in xrange(tree.nGenJets) if pt[j] > ptCut and abs(eta[j]) < etaCut ]
+        if requireFwdSignalJet and len(eta) < 2: continue
+        if requireFwdSignalJet and max(abs(eta[0]),abs(eta[1]))<3.4: continue
         ret.append(calc(jets))
     _cache[_key] = ret
     progress.done("done, %d entries" % len(ret))
@@ -91,12 +94,12 @@ def makeGenMETArray(tree, what, etaCut):
         ret.append(getattr(tree,"gen"+post))
     progress.done("done, %d entries" % len(ret))
     return ret
-def makeCorrArray(tree, what, obj, ptCorrCut, etaCut, corr, _cache={}):
+def makeCorrArray(tree, what, obj, ptCorrCut, etaCut, corr,requireFwdSignalJet=False,_cache={}):
     _key = (id(tree),what,obj,int(ptCorrCut*100),int(etaCut*1000))
     if _key in _cache: return _cache[_key]
     if what == "metmht":
-        met = makeCorrArray(tree, "met", obj, ptCorrCut,    5.0, corr, _cache=_cache)
-        mht = makeCorrArray(tree, "mht", obj, ptCorrCut, etaCut, corr, _cache=_cache)
+        met = makeCorrArray(tree, "met", obj, ptCorrCut,    5.0, corr, False, _cache=_cache)
+        mht = makeCorrArray(tree, "mht", obj, ptCorrCut, etaCut, corr, False, _cache=_cache)
         ret = map(min, zip(met,mht))
         _cache[_key] = ret
         return ret
@@ -121,6 +124,8 @@ def makeCorrArray(tree, what, obj, ptCorrCut, etaCut, corr, _cache={}):
         jets = [ ]
         for j in xrange(number):
             if abs(eta[j]) > etaCut: continue
+            if requireFwdSignalJet and len(eta) < 2: continue
+            if requireFwdSignalJet and max(abs(eta[0]),abs(eta[1]))<3.4: continue
             if corr:
                 pt = corr.correctedPt(rawpt[j], eta[j])
             else:
@@ -228,12 +233,17 @@ parser.add_option("-v", dest="var",  default="ht", help="Choose variable (ht, me
 parser.add_option("--xlabel","--varlabel", dest="varlabel", default=None, help="X axis label for the variable")
 parser.add_option("--xmax", dest="xmax",  default=None, type=float, help="Choose variable")
 parser.add_option("--logxbins", dest="logxbins",  default=None, nargs=2, type=float, help="--logxbins N X will make N bins, the last being a factor X larger than the first")
+parser.add_option("-F","--fwd", dest="requireFwdSignalJet", default=False, action="store_true", help="Require that one of the signal jets for m(jj) have |eta|>3.4")
 options, args = parser.parse_args()
 
 tfiles = [ROOT.TFile.Open(f) for f in args[:2]]
 
 odir = args[2] 
-plotter = plotTemplate(odir)
+os.system("mkdir -p "+odir)
+os.system("cp %s/src/FastPUPPI/NtupleProducer/python/display/index.php %s/" % (os.environ['CMSSW_BASE'], odir));
+ROOT.gROOT.ProcessLine(".x %s/src/FastPUPPI/NtupleProducer/python/display/tdrstyle.cc" % os.environ['CMSSW_BASE']);
+ROOT.gStyle.SetOptStat(0)
+c1 = ROOT.TCanvas("c1","c1")
 
 ROOT.gSystem.Load("libL1TriggerPhase2L1ParticleFlow")
 ROOT.gInterpreter.ProcessLine('#include "L1Trigger/Phase2L1ParticleFlow/src/corrector.h"')
@@ -295,7 +305,7 @@ jecfile = ROOT.TFile.Open(options.jecs)
 for plotkind in options.plots.split(","):
   print "Make plot "+plotkind
   if plotkind != "rate":
-    genArray = makeGenArray(signal, what, options.pt, options.eta)
+    genArray = makeGenArray(signal, what, options.pt, options.eta, options.requireFwdSignalJet)
   rates = map(float, options.rate.split(","))
   if plotkind != "isorate": rates = rates[:1]
   for targetrate in rates:
@@ -319,15 +329,15 @@ for plotkind in options.plots.split(","):
                   jecs = ROOT.l1tpf.corrector(jecdir)
               label = name
               if plotkind == "rate":
-                  recoArrayB = makeCorrArray(background, what, obj, options.pt, options.eta, jecs)
+                  recoArrayB = makeCorrArray(background, what, obj, options.pt, options.eta, jecs, options.requireFwdSignalJet)
                   if not recoArrayB: continue
                   plot = makeCumulativeHTEff(name, recoArrayB, options.xmax)
               elif plotkind == "effc":
-                  recoArrayS = makeCorrArray(signal, what, obj, options.pt, options.eta, jecs)
+                  recoArrayS = makeCorrArray(signal, what, obj, options.pt, options.eta, jecs, options.requireFwdSignalJet)
                   if not recoArrayS: continue
                   plot = makeCumulativeHTEffGenCut(name, recoArrayS, genArray, options.genht, options.xmax, norm=1)
               elif plotkind == "isorate":
-                  recoArrayB = makeCorrArray(background, what, obj, options.pt, options.eta, jecs)
+                  recoArrayB = makeCorrArray(background, what, obj, options.pt, options.eta, jecs, options.requireFwdSignalJet)
                   if not recoArrayB: continue
                   rateplot = makeCumulativeHTEff(name, recoArrayB, options.xmax)
                   cut = 9999
@@ -335,14 +345,14 @@ for plotkind in options.plots.split(","):
                       if rateplot.GetBinContent(ix) <= targetrate:
                           cut = rateplot.GetXaxis().GetBinLowEdge(ix)
                           break
-                  recoArrayS = makeCorrArray(signal, what, obj, options.pt, options.eta, jecs)
+                  recoArrayS = makeCorrArray(signal, what, obj, options.pt, options.eta, jecs, options.requireFwdSignalJet)
                   if not recoArrayS: continue
                   plot = makeEffHist(name, genArray, recoArrayS, cut, options.xmax, logxbins=options.logxbins)
                   label = "%s(%s) > %.0f" % (options.varlabel, name,cut)
               elif plotkind == "roc":
-                  recoArrayB = makeCorrArray(background, what, obj, options.pt, options.eta, jecs)
+                  recoArrayB = makeCorrArray(background, what, obj, options.pt, options.eta, jecs, options.requireFwdSignalJet)
                   if not recoArrayB: continue
-                  recoArrayS = makeCorrArray(signal,     what, obj, options.pt, options.eta, jecs)
+                  recoArrayS = makeCorrArray(signal,     what, obj, options.pt, options.eta, jecs, options.requireFwdSignalJet)
                   if not recoArrayS: continue
                   effsig  = makeCumulativeHTEffGenCut(name+"_s", recoArrayS, genArray, options.genht, options.xmax, norm=1)
                   ratebkg = makeCumulativeHTEff(name+"_b", recoArrayB, options.xmax)
@@ -357,14 +367,14 @@ for plotkind in options.plots.split(","):
           if not plots: 
               print "   nothing to plot!"
               continue
-          plotter.SetLogy(False)
+          c1.SetLogy(False)
           if plotkind == "rate":
-              plotter.SetLogy(True)
+              c1.SetLogy(True)
               frame = ROOT.TH1D("",";L1 %s cut (%s); Minbias rate @ PU200 [kHz]" % (options.varlabel, qualif), 100, 0, options.xmax)
               frame.GetYaxis().SetDecimals(True)
               frame.GetXaxis().SetNdivisions(505)
               frame.GetYaxis().SetRangeUser(0.5, 100e3)
-              leg = ROOT.TLegend(0.56,0.93,0.93,0.93-0.055*len(things))
+              leg = ROOT.TLegend(0.6,0.99,0.95,0.99-0.06*len(things))
               plotname = '%s%s-%s_eta%s_pt%d' % (options.var, plotkind, objset, options.eta, options.pt)
           elif plotkind == "effc":
               gentext, genpost = "iciency", "" 
@@ -372,15 +382,16 @@ for plotkind in options.plots.split(","):
                   gentext = " (Gen %s > %s)" % (options.varlabel, options.genht)
                   gentpost = "_gen%.0f" % (options.genht)
               frame = ROOT.TH1D("",";L1 %s thresh (%s); Eff%s" % (options.varlabel, qualif, gentext), 100, 0, options.xmax)
-              leg = ROOT.TLegend(0.6,0.93,0.93,0.93-0.055*len(things))
+              leg = ROOT.TLegend(0.6,0.19,0.95,0.19+0.06*len(things))
               plotname = '%s%s-%s_eta%s_pt%d%s' % (options.var, plotkind, objset, options.eta, options.pt, genpost)
           elif plotkind == "isorate":
               frame = ROOT.TH1D("",";Gen %s (%s); Eff (L1 rate %.0f kHz)" % (options.varlabel, qualif, targetrate), 100, 0, options.xmax)
               frame.GetYaxis().SetDecimals(True)
-              leg = ROOT.TLegend(0.50,0.18,0.93,0.18+0.055*len(things))
-              plotname = '%s%s-%s_eta%s_pt%d_%.0fkHz' % (options.var, plotkind, objset, options.eta, options.pt, targetrate)
+              leg = ROOT.TLegend(0.65,0.19,0.99,0.19+0.065*len(things))
+              #plotname = '%s%s-%s_eta%s_pt%d_%.0fkHz' % (options.var, plotkind, objset, options.eta, options.pt, targetrate)
+              plotname = '%s%s_%s_%.0fkHz' % (options.var, plotkind, objset, targetrate)
           elif plotkind == "roc":
-              plotter.SetLogy(True)
+              c1.SetLogy(True)
               gentext, genpost = "iciency", "" 
               if options.genht > 0:
                   gentext = " (Gen %s > %s)" % (options.varlabel, options.genht)
@@ -389,7 +400,8 @@ for plotkind in options.plots.split(","):
               frame.GetYaxis().SetDecimals(True)
               frame.GetXaxis().SetNdivisions(505)
               frame.GetYaxis().SetRangeUser(0.5, 100e3)
-              leg = ROOT.TLegend(0.2,0.93,0.55,0.93-0.055*len(things))
+              leg = ROOT.TLegend(0.2,0.98,0.55,0.98-0.06*len(things))
+              #plotname = '%s%s-%s_eta%s_pt%d%s' % (options.var, plotkind, objset, options.eta, options.pt, genpost)
               plotname = '%s%s-%s_eta%s_pt%d%s' % (options.var, plotkind, objset, options.eta, options.pt, genpost)
           frame.Draw()
           if plotkind in ("rate","roc"):
@@ -398,18 +410,21 @@ for plotkind in options.plots.split(","):
               for y in 40e3, 100, 10:
                   line.DrawLine(frame.GetXaxis().GetXmin(),y,frame.GetXaxis().GetXmax(),y)
           for n,p in plots: 
-              p.Draw("PCX SAME" if ("TH1" not in p.ClassName()) else "C SAME")
+              #p.Draw("PCX SAME" if ("TH1" not in p.ClassName()) else "C SAME")
+              p.Draw()
+              c1.Print('%s/%s%s.root' % (odir,plotname,n))
           for n,p in plots: 
               leg.AddEntry(p, n, "L" if plotkind in ("rate","roc") else "LP")
           leg.Draw()
-          plotter.decorations()
-          plotter.Print('%s%s' % (plotname, ("_"+options.label) if options.label else ""))
+          '''
+          c1.Print('%s/%s%s.png' % (odir, plotname, ("_"+options.label) if options.label else ""))
           fout = ROOT.TFile.Open('%s/%s%s.root' % (odir, plotname, ("_"+options.label) if options.label else ""), "RECREATE")
           fout.WriteTObject(frame,"frame")
           for n,p in plots: 
               p.SetTitle(n)
               fout.WriteTObject(p)
           fout.Close()
+          '''
           del frame
 
 
