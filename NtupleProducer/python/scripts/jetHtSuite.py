@@ -76,7 +76,7 @@ def makeGenArray(tree, what, ptCut, etaCut, requireFwdSignalJet=False,_cache={})
         pt,eta,phi = tree.GenJets_pt, tree.GenJets_eta, tree.GenJets_phi
         jets = [ (pt[j],eta[j],phi[j]) for j in xrange(tree.nGenJets) if pt[j] > ptCut and abs(eta[j]) < etaCut ]
         if requireFwdSignalJet and len(eta) < 2: continue
-        if requireFwdSignalJet and pt[0] < 30. or pt[1] < 30.: continue
+        if requireFwdSignalJet and pt[0] < 30. and pt[1] < 30.: continue
         if requireFwdSignalJet and max(abs(eta[0]),abs(eta[1]))<3.4: continue
         ret.append(calc(jets))
     _cache[_key] = ret
@@ -126,7 +126,7 @@ def makeCorrArray(tree, what, obj, ptCorrCut, etaCut, corr,requireFwdSignalJet=F
         if requireFwdSignalJet:
             gen_pt,gen_eta,gen_phi = tree.GenJets_pt, tree.GenJets_eta, tree.GenJets_phi
             if len(gen_eta) < 2: continue
-            if gen_pt[0] < 30. or gen_pt[1] < 30.: continue
+            if requireFwdSignalJet and gen_pt[0] < 30. and gen_pt[1] < 30.: continue
             if max(abs(gen_eta[0]),abs(gen_eta[1]))<3.4: continue
 
         number = getattr(tree, "n"+obj+"Jets")
