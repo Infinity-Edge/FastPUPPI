@@ -126,6 +126,7 @@ def makeCorrArray(tree, what, obj, ptCorrCut, etaCut, corr,requireFwdSignalJet=F
         if requireFwdSignalJet:
             gen_pt,gen_eta,gen_phi = tree.GenJets_pt, tree.GenJets_eta, tree.GenJets_phi
             if len(gen_eta) < 2: continue
+            if gen_pt[0] < 30. or gen_pt[1] < 30.: continue
             if max(abs(gen_eta[0]),abs(gen_eta[1]))<3.4: continue
 
         number = getattr(tree, "n"+obj+"Jets")
