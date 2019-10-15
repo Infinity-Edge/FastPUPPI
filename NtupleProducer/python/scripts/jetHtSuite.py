@@ -117,15 +117,21 @@ def makeCorrArray(tree, what, obj, ptCorrCut, etaCut, corr,requireFwdSignalJet=F
     tree.SetBranchStatus(obj+"Jets_pt",1);
     tree.SetBranchStatus(obj+"Jets_eta",1);
     tree.SetBranchStatus(obj+"Jets_phi",1);
+    tree.SetBranchStatus("GenJets_pt",1);
+    tree.SetBranchStatus("GenJets_eta",1);
+    tree.SetBranchStatus("GenJets_phi",1);
     for i in xrange(tree.GetEntries()):
         tree.GetEntry(i)
+        if requireFwdSignalJet:
+            gen_pt,gen_eta,gen_phi = tree.GenJets_pt, tree.GenJets_eta, tree.GenJets_phi
+            if len(gen_eta) < 2: continue
+            if max(abs(gen_eta[0]),abs(gen_eta[1]))<3.4: continue
+
         number = getattr(tree, "n"+obj+"Jets")
         rawpt,eta,phi = getattr(tree, obj+"Jets_pt"), getattr(tree, obj+"Jets_eta"), getattr(tree, obj+"Jets_phi")
         jets = [ ]
         for j in xrange(number):
             if abs(eta[j]) > etaCut: continue
-            if requireFwdSignalJet and len(eta) < 2: continue
-            if requireFwdSignalJet and max(abs(eta[0]),abs(eta[1]))<3.4: continue
             if corr:
                 pt = corr.correctedPt(rawpt[j], eta[j])
             else:
@@ -329,7 +335,7 @@ for plotkind in options.plots.split(","):
                   jecs = ROOT.l1tpf.corrector(jecdir)
               label = name
               if plotkind == "rate":
-                  recoArrayB = makeCorrArray(background, what, obj, options.pt, options.eta, jecs, options.requireFwdSignalJet)
+                  recoArrayB = makeCorrArray(background, what, obj, options.pt, options.eta, jecs)
                   if not recoArrayB: continue
                   plot = makeCumulativeHTEff(name, recoArrayB, options.xmax)
               elif plotkind == "effc":
@@ -337,7 +343,7 @@ for plotkind in options.plots.split(","):
                   if not recoArrayS: continue
                   plot = makeCumulativeHTEffGenCut(name, recoArrayS, genArray, options.genht, options.xmax, norm=1)
               elif plotkind == "isorate":
-                  recoArrayB = makeCorrArray(background, what, obj, options.pt, options.eta, jecs, options.requireFwdSignalJet)
+                  recoArrayB = makeCorrArray(background, what, obj, options.pt, options.eta, jecs)
                   if not recoArrayB: continue
                   rateplot = makeCumulativeHTEff(name, recoArrayB, options.xmax)
                   cut = 9999
@@ -350,7 +356,7 @@ for plotkind in options.plots.split(","):
                   plot = makeEffHist(name, genArray, recoArrayS, cut, options.xmax, logxbins=options.logxbins)
                   label = "%s(%s) > %.0f" % (options.varlabel, name,cut)
               elif plotkind == "roc":
-                  recoArrayB = makeCorrArray(background, what, obj, options.pt, options.eta, jecs, options.requireFwdSignalJet)
+                  recoArrayB = makeCorrArray(background, what, obj, options.pt, options.eta, jecs)
                   if not recoArrayB: continue
                   recoArrayS = makeCorrArray(signal,     what, obj, options.pt, options.eta, jecs, options.requireFwdSignalJet)
                   if not recoArrayS: continue
