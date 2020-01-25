@@ -1,4 +1,5 @@
 import FWCore.ParameterSet.Config as cms
+from  PhysicsTools.NanoAOD.common_cff import *
 from Configuration.StandardSequences.Eras import eras
 from math import sqrt
 
@@ -142,6 +143,27 @@ process.l1pfmetTable = cms.EDProducer("L1PFMetTableProducer",
     mets = cms.PSet(
     ),
 )
+
+# Add PF Muon info
+process.pfMuTable = cms.EDProducer("SimpleCandidateFlatTableProducer",
+        src = cms.InputTag("l1pfCandidates:PF"),
+        cut = cms.string("abs(pdgId) == 13 && pt > 3 && abs(eta) < 2.4"),
+        name= cms.string("PFMu"),
+        doc = cms.string("reco leptons"),
+        singleton = cms.bool(False), # the number of entries is variable
+        extension = cms.bool(False), # this is the main table
+        variables = cms.PSet(
+            pt  = Var("pt",  float,precision=8),
+            phi = Var("phi", float,precision=8),
+            eta = Var("eta", float,precision=8),
+            mass = Var("mass", float,precision=8),
+            vz  = Var("vz",  float,precision=8),
+            charge  = Var("charge", int, doc="charge id"),
+            quality = Var("? muon.isNonnull ? muon.hwQual : -1", int, doc=    "Quality"),
+            )
+        )
+process.extraPFStuff.add(process.pfMuTable)
+
 process.l1pfmetCentralTable = process.l1pfmetTable.clone(genMet = "genMetCentralTrue", flavour = "Central")
 process.l1pfmetBarrelTable  = process.l1pfmetTable.clone(genMet = "genMetBarrelTrue", flavour = "Barrel")
 
