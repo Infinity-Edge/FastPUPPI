@@ -107,6 +107,11 @@ def makeCorrArray(tree, what, obj, ptCorrCut, etaCut, corr,requireFwdSignalJet=F
         ret = makeRecoMETArray(tree, what, obj, etaCut)
         _cache[_key] = ret
         return ret
+    if "corrMet" in what:                                                                                   
+        #ret = makeCorrMetArray(tree, obj, ptCorrCut, etaCut, corr, _cache)         
+        ret = makeCorrMetArray(tree, obj, 15., 2.3, corr, _cache)
+        _cache[_key] = ret
+        return ret
     calc = makeCalc(what)
     ret = []
     if not tree.GetBranch("n"+obj+"Jets"): 
@@ -152,6 +157,45 @@ def makeRecoMETArray(tree, what, obj, etaCut):
     progress.done("done, %d entries" % len(ret))
     return ret
 
+def makeCorrMetArray(tree, obj, ptCorrCut, etaCut, corr, _cache={}):
+    ret = []
+    _key = (id(tree),what,int(ptCorrCut*100),int(etaCut*1000))
+    if   etaCut <= 1.5: post = "MetBarrel_pt" 
+    elif etaCut <= 2.4: post = "MetCentral_pt"
+    else:               post = "Met_pt"
+    if not tree.GetBranch(obj+post): 
+        return None
+    if not tree.GetBranch("n"+obj+"Jets"): 
+        return None
+    progress = _progress("Reading "+obj+"Jets ...")
+    tree.SetBranchStatus("*",0);
+    tree.SetBranchStatus("n"+obj+"Jets",1);
+    tree.SetBranchStatus(obj+"Jets_pt",1);
+    tree.SetBranchStatus(obj+"Jets_eta",1);
+    tree.SetBranchStatus(obj+"Jets_phi",1);
+    tree.SetBranchStatus(obj+post,1);
+    tree.SetBranchStatus((obj+post).replace("pt", "phi"),1);
+    corr_vec = ROOT.TVector2()                                                                              
+    tmp_vec = ROOT.TVector2()
+    for i in xrange(tree.GetEntries()):
+        tree.GetEntry(i)
+        number = getattr(tree, "n"+obj+"Jets")
+        rawpt,eta,phi = getattr(tree, obj+"Jets_pt"), getattr(tree, obj+"Jets_eta"), getattr(tree, obj+"Jets    _phi")
+        jets = [ ]
+        corr_vec.SetMagPhi(0,0)
+        for j in xrange(number):
+            if abs(eta[j]) > etaCut: continue
+            if corr and rawpt > ptCorrCut:
+                tmp_vec.SetMagPhi(corr.correctedPt(rawpt[j], eta[j])-rawpt[j], phi[j])
+                corr_vec += tmp_vec
+        tmp_vec.SetMagPhi(getattr(tree, obj+post), getattr(tree, (obj+post).replace("pt", "phi")))
+        # corrected MET = old MET + (JEC-HTmiss - no-JEC-HTmiss)
+        # subtract (JEC-noJEC) here instead of adding since 'HTmiss = - vector sum of jets'
+        corr_vec = tmp_vec - corr_vec         
+        ret.append(corr_vec.Mod())
+    _cache[_key] = ret
+    progress.done("done, %d entries" % len(ret))
+    return ret
 
 def genCutCorrArray(corrArray, genArray, genThr):
     if len(genArray) != len(corrArray): raise RuntimeError("Mismatch")
