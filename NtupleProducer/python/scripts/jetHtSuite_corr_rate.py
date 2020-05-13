@@ -200,7 +200,7 @@ def makeCorrMetArray(tree, obj, ptCorrCut, etaCut, corr, _cache={}):
         corr_vec.SetMagPhi(0,0)
         for j in xrange(number):
             if abs(eta[j]) > etaCut: continue
-            if corr and rawpt > ptCorrCut:
+            if corr and rawpt[j] > ptCorrCut:
                 tmp_vec.SetMagPhi(corr.correctedPt(rawpt[j], eta[j])-rawpt[j], phi[j])
                 corr_vec += tmp_vec
         tmp_vec.SetMagPhi(getattr(tree, obj+post), getattr(tree, (obj+post).replace("pt", "phi")))
