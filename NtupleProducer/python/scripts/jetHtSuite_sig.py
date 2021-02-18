@@ -64,14 +64,16 @@ def makeGenArray(tree, what, ptCut, etaCut, metCut, sigCut, _cache={}):
         return ret
     if "met" in what:
         if namestr(tree, globals()) == 'background':
-            ret = makeGenMETArray(tree, what, etaCut, 0., 0.)
+            #ret = makeGenMETArray(tree, what, etaCut, 0., 0.)
+            ret = makeGenMETArray(tree, what, etaCut, metCut, sigCut)
         else:
             ret = makeGenMETArray(tree, what, etaCut, metCut, sigCut)
         _cache[_key] = ret
         return ret
     if "sig" in what:
         if namestr(tree, globals()) == 'background':
-            ret = makeGenMETSigArray(tree, what, etaCut, 0., 0.)
+            #ret = makeGenMETSigArray(tree, what, etaCut, 0., 0.)
+            ret = makeGenMETSigArray(tree, what, etaCut, metCut, sigCut)
         else:
             ret = makeGenMETSigArray(tree, what, etaCut, metCut, sigCut)
         _cache[_key] = ret
@@ -101,12 +103,13 @@ def makeGenMETArray(tree, what, etaCut, metCut, sigCut):
     progress_pu = _progress("Reading L1"+post_sig+" ...")
     tree.SetBranchStatus("*",0);
     tree.SetBranchStatus("gen"+post,1);
+    tree.SetBranchStatus("L1Puppi"+post,1);
     tree.SetBranchStatus("L1"+post_sig,1);
     ret = []
     for i in xrange(tree.GetEntries()):
         tree.GetEntry(i)
-        #if getattr(tree,"L1Puppi"+post) >= metCut and getattr(tree,"L1"+post_sig) >= sigCut:
-        if getattr(tree,"L1"+post_sig) >= sigCut:
+        if getattr(tree,"gen"+post) >= metCut and getattr(tree,"L1"+post_sig) >= sigCut:
+        #if getattr(tree,"L1"+post_sig) >= sigCut:
             ret.append(getattr(tree,"gen"+post))
     progress.done("done, %d entries" % len(ret))
     return ret
@@ -145,16 +148,19 @@ def makeCorrArray(tree, what, obj, ptCorrCut, etaCut, metCut, sigCut, corr, _cac
     if "met" in what:
         temp_name = ['background']
         if namestr(tree, globals()) == temp_name:
-            ret = makeRecoMETArray(tree, what, obj, etaCut, 0., 0.)
+            #ret = makeRecoMETArray(tree, what, obj, etaCut, 0., 0.)
+            ret = makeRecoMETArray(tree, what, obj, etaCut, metCut, sigCut)
         else:
             ret = makeRecoMETArray(tree, what, obj, etaCut, metCut, sigCut)
         _cache[_key] = ret
         return ret
     if "sig" in what:
-        #print(namestr(tree, globals()))
+        print(namestr(tree, globals()))
         temp_name = ['background']
+        print((namestr(tree, globals()) == temp_name))
         if namestr(tree, globals()) == temp_name:
-            ret = makeMETSigArray(tree, what, obj, etaCut, 0., 0.)
+            #ret = makeMETSigArray(tree, what, obj, etaCut, 0., 0.)
+            ret = makeMETSigArray(tree, what, obj, etaCut, metCut, sigCut)
         else:
             ret = makeMETSigArray(tree, what, obj, etaCut, metCut, sigCut)
         _cache[_key] = ret
